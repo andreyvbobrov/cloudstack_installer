@@ -60,25 +60,28 @@
       enabled: yes
   - name: update mysql root password
     mysql_user:
-      user="root"
-      password="{{ mysql_root_password }}"
-      host="localhost"
-      login_user="root"
-      login_password=""
-    when:
-      password==''
-#  - name: add mysql user replication and grant access with REPLICATION SLAVE rights
-#    mysql_user:
-#      user="replication"
-#      password=secret
-#      priv: "*.*:REPLICATION SLAVE"
-#      state: present
-#  - name: add mysql user cloud
-#    mysql_user:
-#      user="cloud"
-#      password="{{ cloud_password }}"
-#      priv: '*.*:ALL,GRANT'
-#      state: present
+      user: "root"
+      password: "{{ mysql_root_password }}"
+      host: "localhost"
+      login_user: "root"
+      login_password: ""
+    ignore_errors: true
+  - name: add mysql user replication and grant access with REPLICATION SLAVE rights
+    mysql_user:
+      user: "replication"
+      password: "{{ replication_password }}"
+      priv: "*.*:REPLICATION SLAVE"
+      login_user: "root"
+      login_password: "{{ mysql_root_password }}"
+      state: present
+  - name: add mysql user cloud
+    mysql_user:
+      user: "cloud"
+      password: "{{ cloud_password }}"
+      priv: '*.*:ALL,GRANT'
+      login_user: "root"
+      login_password: "{{ mysql_root_password }}"
+      state: present
   vars:
     mysql_root_password: Cl0ud5tack
     replication_password: Cl0ud5tack
