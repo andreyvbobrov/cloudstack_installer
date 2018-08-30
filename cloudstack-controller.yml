@@ -8,12 +8,23 @@
       description: Cloudstack Repo
       baseurl: http://download.cloudstack.org/centos7/4.11/
       gpgcheck: no
+  - name: upgrade all packages
+    yum:
+      name: '*'
+      state: latest 
+  - name: Install epel-relese
+    yum:
+      name: epel-release
+      state: latest
+  - name: Install mysql-connector-python
+    yum:
+      name: mysql-connector-python
+      state: latest
   - name: Install a list of packages
     yum:
       name: "{{ packages }}"
     vars:
       packages:
-      - epel-release			#for mysql-connector-python
       - cloudstack-management
       - cloudstack-usage
       - cloudstack-mysql-ha
@@ -21,9 +32,54 @@
       - mariadb
       - keepalived
       - haproxy
+      - MySQL-python
 
+- hosts: first-controller
+  become: true
+  tasks:
+  - name: Copy my.cnf for First controller Cloudstack
+    copy:
+      src: templates/first_controller.my.cnf
+      dest: /etc/my.cnf
 
+- hosts: second-controller
+  become: true
+  tasks:
+  - name: Copy my.cnf for Second controller Cloudstack
+    copy:
+      src: templates/second_controller.my.cnf
+      dest: /etc/my.cnf
 
-
-
-
+- hosts: all
+  become: true
+  tasks:
+  - name: start mysql
+    service:
+      name: mariadb
+      state: started
+      enabled: yes
+  - name: update mysql root password
+    mysql_user:
+      user="root"
+      password="{{ mysql_root_password }}"
+      host="localhost"
+      login_user="root"
+      login_password=""
+    when:
+      password==''
+#  - name: add mysql user replication and grant access with REPLICATION SLAVE rights
+#    mysql_user:
+#      user="replication"
+#      password=secret
+#      priv: "*.*:REPLICATION SLAVE"
+#      state: present
+#  - name: add mysql user cloud
+#    mysql_user:
+#      user="cloud"
+#      password="{{ cloud_password }}"
+#      priv: '*.*:ALL,GRANT'
+#      state: present
+  vars:
+    mysql_root_password: Cl0ud5tack
+    replication_password: Cl0ud5tack
+    cloud_password: secret
