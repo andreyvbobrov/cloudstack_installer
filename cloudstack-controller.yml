@@ -1,0 +1,29 @@
+---
+- hosts: all
+  become: true
+  tasks:
+  - name: Add Cloudstack Repo
+    yum_repository:
+      name: cloudstack
+      description: Cloudstack Repo
+      baseurl: http://download.cloudstack.org/centos7/4.11/
+      gpgcheck: no
+  - name: Install a list of packages
+    yum:
+      name: "{{ packages }}"
+    vars:
+      packages:
+      - epel-release			#for mysql-connector-python
+      - cloudstack-management
+      - cloudstack-usage
+      - cloudstack-mysql-ha
+      - mariadb-server
+      - mariadb
+      - keepalived
+      - haproxy
+
+
+
+
+
+
