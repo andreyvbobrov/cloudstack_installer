@@ -33,6 +33,11 @@
       - keepalived
       - haproxy
       - MySQL-python
+  - name: Set selinux to permissive
+    command: setenforce permissive
+    changed_when: false
+  - name: Ensure selinux is set permanently
+    selinux: policy=targeted state=permissive
 
 - hosts: first-controller
   become: true
@@ -137,3 +142,29 @@
     mysql_root_password: Cl0ud5tack
     replication_password: Cl0ud5tack
     mysql_replication_master: 172.28.128.6
+
+- hosts: first-controller
+  become: true
+  tasks:
+  - name: Run cloudstack-setup-databases on the first controller
+    shell: "cloudstack-setup-databases cloud:{{ cloud_password }}@localhost --deploy-as=root:{{ mysql_root_password }}"
+    register: cloudstack-setup-databases_output
+#  - name: Run cloudstack-setup-databases output
+#    debug: msg="{{ cloudstack-setup-databases_output.stdout }}"
+#  - name: Run cloudstack-setup-databases error
+#    debug: msg="{{ cloudstack-setup-databases_output.stderr }}"
+  vars:
+    mysql_root_password: Cl0ud5tack
+    replication_password: Cl0ud5tack
+    cloud_password: secret
+
+- hosts: second-controller
+  become: true
+  tasks:
+  - name: Run cloudstack-setup-databases  on the second controller
+    shell: "cloudstack-setup-databases cloud:{{ cloud_password }}@localhost"
+    register: cloudstack-setup-databases_output
+  vars:
+    mysql_root_password: Cl0ud5tack
+    replication_password: Cl0ud5tack
+    cloud_password: secret
