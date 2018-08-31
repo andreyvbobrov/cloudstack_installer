@@ -53,7 +53,7 @@
 - hosts: all
   become: true
   tasks:
-  - name: start mysql
+  - name: start mysql service
     service:
       name: mariadb
       state: started
@@ -82,7 +82,58 @@
       login_user: "root"
       login_password: "{{ mysql_root_password }}"
       state: present
+  - name: Stop slave on all nodes
+    mysql_replication:
+      mode: stopslave
+      login_user: "root"
+      login_password: "{{ mysql_root_password }}"
   vars:
     mysql_root_password: Cl0ud5tack
     replication_password: Cl0ud5tack
     cloud_password: secret
+
+- hosts: first-controller
+  become: true
+  tasks:
+  - name: change master to second controller
+    mysql_replication:
+      mode: changemaster
+      master_host: "{{ mysql_replication_slave }}"
+      master_user: "replication"
+      master_password: "{{ replication_password }}"
+      master_log_file: mysql-bin.000001
+      master_log_pos: 245
+      login_user: "root"
+      login_password: "{{ mysql_root_password }}"
+  - name: start slave on first controller
+    mysql_replication:
+      mode: startslave
+      login_user: "root"
+      login_password: "{{ mysql_root_password }}"
+  vars:
+    mysql_root_password: Cl0ud5tack
+    replication_password: Cl0ud5tack
+    mysql_replication_slave: 172.28.128.5
+
+- hosts: second-controller
+  become: true
+  tasks:
+  - name: change master to first controller
+    mysql_replication:
+      mode: changemaster
+      master_host: "{{ mysql_replication_master }}"
+      master_user: "replication"
+      master_password: "{{ replication_password }}"
+      master_log_file: mysql-bin.000001
+      master_log_pos: 245
+      login_user: "root"
+      login_password: "{{ mysql_root_password }}"
+  - name: start slave on second controller
+    mysql_replication:
+      mode: startslave
+      login_user: "root"
+      login_password: "{{ mysql_root_password }}"
+  vars:
+    mysql_root_password: Cl0ud5tack
+    replication_password: Cl0ud5tack
+    mysql_replication_master: 172.28.128.6
