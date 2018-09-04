@@ -2,16 +2,21 @@
 - hosts: all
   become: true
   tasks:
-  - name: Add Cloudstack Repo
+  - name: Add Cloudstack External Repo
     yum_repository:
-      name: cloudstack
-      description: Cloudstack Repo
+      name: cloudstack_external
+      description: Cloudstack External Repo
       baseurl: http://download.cloudstack.org/centos7/4.11/
       gpgcheck: no
+  - name: Add Cloudstack Local Repo
+    copy:
+      src: templates/cloudstack.repo.j2
+      dest: /etc/yum.repos.d/cloudstack.repo
   - name: upgrade all packages
     yum:
       name: '*'
-      state: latest 
+      state: latest
+  # Add epel-release for repairing dependensies with mysql-connector-python
   - name: Install epel-relese
     yum:
       name: epel-release
@@ -33,6 +38,7 @@
       - keepalived
       - haproxy
       - MySQL-python
+      - ucarp
   - name: Set selinux to permissive
     command: setenforce permissive
     changed_when: false
@@ -118,6 +124,7 @@
   vars:
     mysql_root_password: Cl0ud5tack
     replication_password: Cl0ud5tack
+    mysql_replication_master: 172.28.128.6
     mysql_replication_slave: 172.28.128.5
 
 - hosts: second-controller
@@ -138,14 +145,30 @@
       mode: startslave
       login_user: "root"
       login_password: "{{ mysql_root_password }}"
+  - name: Copy template VIP-001
+    copy:
+      src: templates/vip-001.conf
+      dest: /etc/ucarp/vip-001.conf
+  - name: add VIP_ADDRESS to /etc/ucarp/vip-001.conf
+    lineinfile:
+      path: /etc/ucarp/vip-001.conf
+      regexp: '^VIP_ADDRESS='
+      line: 'VIP_ADDRESS={{mysql_replication_vip}}'
   vars:
     mysql_root_password: Cl0ud5tack
     replication_password: Cl0ud5tack
     mysql_replication_master: 172.28.128.6
+    mysql_replication_slave: 172.28.128.5
+    mysql_replication_vip: 172.28.128.100
 
 - hosts: first-controller
   become: true
   tasks:
+  - name: add SOURCE_ADDRESS to /etc/ucarp/vip-001.conf
+    lineinfile:
+      path: /etc/ucarp/vip-001.conf
+      regexp: '^SOURCE_ADDRESS='
+      line: 'SOURCE_ADDRESS={{ mysql_replication_master }}'
   - name: Run cloudstack-setup-databases on the first controller
     shell: "cloudstack-setup-databases cloud:{{ cloud_password }}@localhost --deploy-as=root:{{ mysql_root_password }}"
     register: cloudstack-setup-databases_output
@@ -157,10 +180,18 @@
     mysql_root_password: Cl0ud5tack
     replication_password: Cl0ud5tack
     cloud_password: secret
+    mysql_replication_master: 172.28.128.6
+    mysql_replication_slave: 172.28.128.5
+    mysql_replication_vip: 172.28.128.100
 
 - hosts: second-controller
   become: true
   tasks:
+  - name: add SOURCE_ADDRESS to /etc/ucarp/vip-001.conf
+    lineinfile:
+      path: /etc/ucarp/vip-001.conf
+      regexp: '^SOURCE_ADDRESS='
+      line: 'SOURCE_ADDRESS={{ mysql_replication_slave }}'
   - name: Run cloudstack-setup-databases  on the second controller
     shell: "cloudstack-setup-databases cloud:{{ cloud_password }}@localhost"
     register: cloudstack-setup-databases_output
@@ -168,3 +199,55 @@
     mysql_root_password: Cl0ud5tack
     replication_password: Cl0ud5tack
     cloud_password: secret
+    mysql_replication_master: 172.28.128.6
+    mysql_replication_slave: 172.28.128.5
+    mysql_replication_vip: 172.28.128.100
+
+- hosts: all
+  become: true
+  tasks:
+  - name: add db.cloud.host to /etc/cloudstack/management/db.properties
+    lineinfile:
+      path: /etc/cloudstack/management/db.properties
+      regexp: '^db.cloud.host'
+      line: 'db.cloud.host={{mysql_replication_master}}'
+  - name: add db.cloud.initialTimeout to /etc/cloudstack/management/db.properties
+    lineinfile:
+      path: /etc/cloudstack/management/db.properties
+      regexp: '^db.cloud.initialTimeout'
+      line: 'db.cloud.initialTimeout=300'
+  - name: add db.ha.enabled to /etc/cloudstack/management/db.properties
+    lineinfile:
+      path: /etc/cloudstack/management/db.properties
+      regexp: '^db.ha.enabled'
+      line: 'db.ha.enabled=true'
+  - name: add db.cloud.slaves to /etc/cloudstack/management/db.properties
+    lineinfile:
+      path: /etc/cloudstack/management/db.properties
+      regexp: '^db.cloud.slaves'
+      line: 'db.cloud.slaves={{mysql_replication_slave}}'
+  - name: Run cloudstack-setup-management
+    shell: "cloudstack-setup-management --no-start"
+    register: cloudstack-setup-management --no-start_output
+  - name: service cloudstack-management.service start
+    service:
+      name: cloudstack-management.service
+      state: started
+  - name: create file /etc/ucarp/vip-001.pwd
+    file:
+      dest: /etc/ucarp/vip-001.pwd
+      state: touch
+  - name: add Password to /etc/ucarp/vip-001.pwd
+    lineinfile:
+      path: /etc/ucarp/vip-001.pwd
+      line: 'dev1'
+  - name: service ucarp@001 start
+    service:
+      name: ucarp@001
+      state: started
+      enabled: yes
+  vars:
+    mysql_root_password: Cl0ud5tack
+    replication_password: Cl0ud5tack
+    mysql_replication_master: 172.28.128.6
+    mysql_replication_slave: 172.28.128.5
