@@ -154,12 +154,14 @@
       path: /etc/ucarp/vip-001.conf
       regexp: '^VIP_ADDRESS='
       line: 'VIP_ADDRESS={{mysql_replication_vip}}'
+
   vars:
     mysql_root_password: Cl0ud5tack
     replication_password: Cl0ud5tack
     mysql_replication_master: 172.28.128.6
     mysql_replication_slave: 172.28.128.5
     mysql_replication_vip: 172.28.128.100
+
 
 - hosts: first-controller
   become: true
@@ -176,6 +178,26 @@
 #    debug: msg="{{ cloudstack-setup-databases_output.stdout }}"
 #  - name: Run cloudstack-setup-databases error
 #    debug: msg="{{ cloudstack-setup-databases_output.stderr }}"
+  #Generating certificates
+  - name: Export
+    shell: "export AWS creds for r53"
+  - name: Export AWS_ACCESS_KEY_ID
+    shell: "export AWS_ACCESS_KEY_ID={{ LetsEncryptCreds }}"
+  - name: Export
+    shell: "export AWS_SECRET_ACCESS_KEY={{ LetsEncryptCreds }}"
+  - name: Generate certs valid for all public IPs for the zone
+    shell: "/root/.acme.sh/acme.sh  --issue --dns dns_aws -d {{ CSDOM }} -d '*.svm.{{ CSDOM }}'"
+    ignore_errors: true     #check with real domain
+  - name: Concatenate for HA proxy, cer
+    shell: "cat /root/.acme.sh/{{ CSDOM }}/{{ CSDOM }}.crt > {{ CSDOM }}.pem"
+    ignore_errors: true     #check with real domain
+  - name: Concatenate for HA proxy, key
+    shell: "cat /root/.acme.sh/{{ CSDOM }}/{{ CSDOM }}.key >> {{ CSDOM }}.pem"
+    ignore_errors: true     #check with real domain
+  - name: Copy cert to the local folder
+    shell: "cp {{ CSDOM }}.pem /etc/haproxy/"
+  - name: Copy cert to the second controller
+    shell: "scp {{ CSDOM }}.pem {{ mysql_replication_slave }}:/etc/haproxy/"
   vars:
     mysql_root_password: Cl0ud5tack
     replication_password: Cl0ud5tack
@@ -183,7 +205,8 @@
     mysql_replication_master: 172.28.128.6
     mysql_replication_slave: 172.28.128.5
     mysql_replication_vip: 172.28.128.100
-
+    LetsEncryptCreds: example.com
+    CSDOM: cstack-prod.example.com
 - hosts: second-controller
   become: true
   tasks:
@@ -246,6 +269,12 @@
       name: ucarp@001
       state: started
       enabled: yes
+  - name: service haproxy restart
+    service:
+      name: haproxy
+      state: restarted
+      enabled: yes
+
   vars:
     mysql_root_password: Cl0ud5tack
     replication_password: Cl0ud5tack
