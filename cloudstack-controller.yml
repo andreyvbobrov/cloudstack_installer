@@ -275,8 +275,46 @@
       state: restarted
       enabled: yes
 
+# HAPROXY
+  - name: Copy template ha-proxy
+    copy:
+      src: templates/haproxy.cfg.j2
+      dest: /etc/haproxy/haproxy.cfg
+  - name: bind *:443 ssl crt in haproxy.cfg
+    lineinfile:
+      path: /etc/haproxy/haproxy.cfg
+      regexp: '^bind *:443 ssl crt'
+      line: 'bind *:443 ssl crt /etc/haproxy/{{ CSDOM }}.pem'
+  - name: bind *:443 ssl crt in haproxy.cfg
+    lineinfile:
+      path: /etc/haproxy/haproxy.cfg
+      regexp: '^server ctl1'
+      line: 'server ctl1 cs-ctl1.sys.{{ LetsEncryptCreds }}:8080 cookie 1 check'
+  - name: bind *:443 ssl crt in haproxy.cfg
+    lineinfile:
+      path: /etc/haproxy/haproxy.cfg
+      regexp: '^server ctl2'
+      line: 'server ctl2 cs-ctl2.sys.{{ LetsEncryptCreds }}:8080 cookie 2 check'
+
+#Cloudstack-infra
+  - name: install ticketmaster-api-extensions
+    yum:
+      name: http://maven.platform.tm.tmcs:8081/nexus/content/repositories/releases/com/ticketmaster/techops-infra/cloudstack/ticketmaster-api-extensions-0.15.0-1.x86_64.rpm
+      state: present
+    ignore_errors: true
+  - name: install ticketmaster-xen-migration
+    yum:
+      name: http://maven.platform.tm.tmcs:8081/nexus/content/repositories/releases/com/ticketmaster/techops-infra/cloudstack/ticketmaster-xen-migration-0.16.3-1.x86_64.rpm
+      state: present
+    ignore_errors: true
+  - name: service haproxy restart
+    service:
+      name: cloudstack-management
+      state: restarted
   vars:
     mysql_root_password: Cl0ud5tack
     replication_password: Cl0ud5tack
     mysql_replication_master: 172.28.128.6
     mysql_replication_slave: 172.28.128.5
+    CSDOM: cstack-prod.example.com
+    LetsEncryptCreds: example.com
